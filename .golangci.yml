@@ -1,0 +1,29 @@
+linters-settings:
+  depguard:
+    rules:
+      allowAll:
+        allow:
+          - github.com/stretchr/testify/mock
+          - github.com/stretchr/testify/require
+          - github.com/tarm/serial
+          - github.com/janekbaraniewski/gobd2/gobd2
+        files:
+          - gobd2/**
+
+  revive:
+    # Add revive settings here
+    # Example: ignore generated files
+    ignore-generated-header: true
+    severity: warning
+    rules:
+      - name: exported
+        severity: warning
+
+linters:
+  enable-all: true
+  disable:
+    - wrapcheck
+    - exhaustruct
+    - gomnd
+    - goerr113
+    - ireturn
