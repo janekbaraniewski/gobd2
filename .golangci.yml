@@ -30,3 +30,4 @@ linters:
     - exhaustruct
     - ireturn
     - perfsprint
+    - godox
