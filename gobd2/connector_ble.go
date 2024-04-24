@@ -1,6 +1,7 @@
 package gobd2
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -27,13 +28,11 @@ func NewBluetoothConnector(deviceAddress string) *BluetoothConnector {
 // Connect initializes the Bluetooth adapter and starts device discovery.
 func (bc *BluetoothConnector) Connect() error {
 	var err error
-	bc.adapter, err = adapter.GetDefaultAdapter()
-	if err != nil {
+	if bc.adapter, err = adapter.GetDefaultAdapter(); err != nil {
 		return fmt.Errorf("failed to get default adapter: %w", err)
 	}
 
-	err = bc.adapter.StartDiscovery()
-	if err != nil {
+	if err = bc.adapter.StartDiscovery(); err != nil {
 		return fmt.Errorf("failed to start discovery: %w", err)
 	}
 
@@ -48,12 +47,13 @@ func (bc *BluetoothConnector) Connect() error {
 	for _, d := range devices {
 		if d.Properties.Address == bc.deviceAddress {
 			bc.device = d
+
 			break
 		}
 	}
 
 	if bc.device == nil {
-		return fmt.Errorf("device not found")
+		return errors.New("device not found")
 	}
 
 	err = bc.device.Connect()
@@ -69,10 +69,11 @@ func (bc *BluetoothConnector) Close() error {
 	if bc.device != nil {
 		return bc.device.Disconnect()
 	}
+
 	return nil
 }
 
-// Assuming you have a connected device object
+// Assuming you have a connected device object.
 func (bc *BluetoothConnector) SendCommand(command CommandCode) (string, error) {
 	// TODO: find the actual dbus paths for the device
 	servicePath := fmt.Sprintf("%s/service0001", bc.device.Path())
@@ -87,6 +88,7 @@ func (bc *BluetoothConnector) SendCommand(command CommandCode) (string, error) {
 	// Access the characteristic
 	char := conn.Object("org.bluez", dbus.ObjectPath(charPath))
 	writeValue := []byte(string(command) + "\r")
+
 	call := char.Call("org.bluez.GattCharacteristic1.WriteValue", 0, writeValue, map[string]interface{}{})
 	if call.Err != nil {
 		return "", fmt.Errorf("failed to write value: %w", call.Err)
@@ -94,12 +96,17 @@ func (bc *BluetoothConnector) SendCommand(command CommandCode) (string, error) {
 
 	// Read the response, assuming the characteristic allows reading or notifies after write
 	var value []byte
+
 	call = char.Call("org.bluez.GattCharacteristic1.ReadValue", 0, map[string]interface{}{})
 	if call.Err != nil {
 		return "", fmt.Errorf("failed to read value: %w", call.Err)
 	}
-	call.Store(&value)
+
+	if err := call.Store(&value); err != nil {
+		return "", err
+	}
 
 	response := strings.Trim(string(value), " \r\n>")
+
 	return response, nil
 }
