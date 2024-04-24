@@ -1,0 +1,38 @@
+name: Go Workflow
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: '^1.17'
+
+    - name: Build CLI
+      run: make build-cli
+
+    - name: Run tests
+      run: make test
+
+    - name: Lint
+      run: make lint
+
+    - name: Format
+      run: make fmt
+
+    - name: Vet
+      run: make vet
