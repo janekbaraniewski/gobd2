@@ -1,6 +1,6 @@
-.PHONY: help build test clean fmt lint vet
+.PHONY: help build test clean fmt lint vet doc
 
-PKG := ./...
+PKG := github.com/janekbaraniewski/gobd2/gobd2
 
 help:  ## Show this help message
 	@echo "Usage: make [target]"
@@ -31,3 +31,7 @@ lint: ## Run golangci-lint
 vet: ## Vet examines Go source code and reports suspicious constructs
 	@echo "Running Go vet..."
 	go vet $(PKG)
+
+doc: ## Run godoc server and open the documentation in a web browser
+	@echo "Starting godoc server at http://localhost:8080/"
+	@godoc -http=:8080
