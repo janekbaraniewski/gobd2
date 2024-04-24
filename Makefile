@@ -1,6 +1,10 @@
 .PHONY: help build test clean fmt lint vet doc
 
 PKG := github.com/janekbaraniewski/gobd2/gobd2
+BINARY_NAME=gobd2-cli
+BUILD_DIR=./bin
+GOOS?=$(shell go env GOOS)
+GOARCH?=$(shell go env GOARCH)
 
 help:  ## Show this help message
 	@echo "Usage: make [target]"
@@ -11,6 +15,13 @@ help:  ## Show this help message
 build: ## Build the project
 	@echo "Building the project..."
 	go build $(PKG)
+
+.PHONY: build-cli
+build-cli:
+	@echo "Building the CLI application for $(GOOS)/$(GOARCH)..."
+	@mkdir -p $(BUILD_DIR)
+	@GOOS=$(GOOS) GOARCH=$(GOARCH) go build -o $(BUILD_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH) ./cmd
+	@echo "Build complete: $(BUILD_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)"
 
 test: ## Run tests
 	@echo "Running tests..."
