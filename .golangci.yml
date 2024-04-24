@@ -26,3 +26,7 @@ linters:
     - gomnd
     - goerr113
     - gochecknoglobals
+    - typecheck
+    - varnamelen
+    - exhaustruct
+    - ireturn
