@@ -23,10 +23,6 @@ linters:
   enable-all: true
   disable:
     - wrapcheck
-    - exhaustruct
     - gomnd
     - goerr113
-    - ireturn
     - gochecknoglobals
-    - varnamelen
-    - perfsprint
