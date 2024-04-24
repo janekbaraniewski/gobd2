@@ -11,28 +11,31 @@ import (
 
 	"github.com/gizak/termui/v3"
 	"github.com/gizak/termui/v3/widgets"
-	"github.com/janekbaraniewski/gobd2/gobd2" // Update this path as necessary
+	"github.com/janekbaraniewski/gobd2/gobd2"
 	"github.com/spf13/cobra"
 )
 
 var (
-	portName      = "/dev/ttyUSB0" // Set this to your OBD-II device's serial port
-	baudRate      = 9600           // Set this to the correct baud rate for your device
-	deviceAddress = ""
-	useBluetooth  = false
+	portName      = "/dev/ttyUSB0" // Default serial port
+	baudRate      = 9600           // Default baud rate for serial connections
+	deviceAddress = ""             // Bluetooth device address (empty by default)
+	useBluetooth  = false          // Flag to toggle Bluetooth connection
 )
 
+// monitorCmd defines the command line structure and handling for the monitoring tool.
 var monitorCmd = &cobra.Command{
 	Use:   "monitor",
-	Short: "Monitor all available PIDs",
-	Long:  `Monitor all available PIDs and display the results in real-time in a full-screen UI.`,
+	Short: "Monitors vehicle diagnostics using OBD2 interfaces.",
+	Long: `This command supports real-time monitoring of various vehicle diagnostics parameters
+from an OBD2 interface via serial or Bluetooth connection. It displays data dynamically in
+a full-screen terminal interface powered by termui.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		var connector gobd2.Connector
 		var err error
 
 		if useBluetooth {
 			if deviceAddress == "" {
-				log.Fatal("Bluetooth device address must be provided")
+				log.Fatal("Bluetooth device address must be provided when using Bluetooth.")
 			}
 			connector = gobd2.NewBluetoothConnector(deviceAddress)
 		} else {
@@ -51,6 +54,7 @@ var monitorCmd = &cobra.Command{
 	},
 }
 
+// runMonitor initializes the UI and starts the monitoring process.
 func runMonitor(commander *gobd2.Commander) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -64,7 +68,7 @@ func runMonitor(commander *gobd2.Commander) error {
 		gobd2.EngineRPMCommand,
 		gobd2.VehicleSpeedCommand,
 		gobd2.ThrottlePositionCommand,
-		gobd2.VehicleSpeedCommand,
+		gobd2.CoolantTemperatureCommand,
 	}
 	widgetsList := setupUI(pids)
 	startMonitoring(ctx, commander, widgetsList, pids)
@@ -73,6 +77,7 @@ func runMonitor(commander *gobd2.Commander) error {
 	return nil
 }
 
+// setupUI configures the UI elements for each PID to be monitored.
 func setupUI(pids []gobd2.CommandCode) []*widgets.Paragraph {
 	termWidth, termHeight := termui.TerminalDimensions()
 	widgetsList := make([]*widgets.Paragraph, len(pids))
@@ -82,11 +87,11 @@ func setupUI(pids []gobd2.CommandCode) []*widgets.Paragraph {
 	for i, pid := range pids {
 		widgetsList[i] = widgets.NewParagraph()
 		widgetsList[i].Title = "PID: " + string(pid)
-		widgetsList[i].Text = "Initializing..."
+		widgetsList[i].Text = "Waiting for data..."
 		widgetsList[i].Border = true
-		colWidth := float64(1) / float64(len(pids))
-		widgetsList[i].SetRect(0, 0, int(float64(termWidth)*colWidth), termHeight)
-		grid.Set(termui.NewRow(colWidth, termui.NewCol(colWidth, 0, widgetsList[i])))
+		colWidth := float64(12) / float64(len(pids))
+		widgetsList[i].SetRect(0, i*termHeight/len(pids), termWidth, (i+1)*termHeight/len(pids))
+		grid.Set(termui.NewRow(1.0/float64(len(pids)), termui.NewCol(colWidth, 0, widgetsList[i])))
 	}
 
 	termui.Render(grid)
@@ -94,15 +99,15 @@ func setupUI(pids []gobd2.CommandCode) []*widgets.Paragraph {
 	return widgetsList
 }
 
-func startMonitoring(ctx context.Context, commander *gobd2.Commander, widgetsList []*widgets.Paragraph, pids []gobd2.CommandCode) { //nolint:lll
+// startMonitoring begins the data monitoring process for each PID using goroutines.
+func startMonitoring(ctx context.Context, commander *gobd2.Commander, widgetsList []*widgets.Paragraph, pids []gobd2.CommandCode) {
 	var wg sync.WaitGroup
 
 	for i, pid := range pids {
 		wg.Add(1)
 
-		monitorFunc := func(i int, pid gobd2.CommandCode) {
+		go func(i int, pid gobd2.CommandCode) {
 			defer wg.Done()
-
 			ticker := time.NewTicker(2 * time.Second)
 			defer ticker.Stop()
 
@@ -117,17 +122,16 @@ func startMonitoring(ctx context.Context, commander *gobd2.Commander, widgetsLis
 					} else {
 						widgetsList[i].Text = "Data: " + data
 					}
-
 					termui.Render(widgetsList[i])
 				}
 			}
-		}
-		go monitorFunc(i, pid)
+		}(i, pid)
 	}
 
 	wg.Wait()
 }
 
+// handleUIEvents handles user inputs and system signals to gracefully shut down the application.
 func handleUIEvents(ctx context.Context) {
 	uiEvents := termui.PollEvents()
 
@@ -146,11 +150,12 @@ func handleUIEvents(ctx context.Context) {
 	}
 }
 
+// registerMonitorCommand adds the monitor command to the root command and sets up command line flags.
 func registerMonitorCommand(rootCmd *cobra.Command) {
-	monitorCmd.Flags().StringVarP(&portName, "port", "p", "/dev/ttyUSB0", "Serial port name")
-	monitorCmd.Flags().IntVarP(&baudRate, "baud", "b", 9600, "Baud rate for serial connection")
-	monitorCmd.Flags().StringVarP(&deviceAddress, "address", "a", "", "Bluetooth device address")
-	monitorCmd.Flags().BoolVarP(&useBluetooth, "bluetooth", "l", false, "Use Bluetooth connector instead of serial")
+	monitorCmd.Flags().StringVarP(&portName, "port", "p", "/dev/ttyUSB0", "Specify the serial port for connection")
+	monitorCmd.Flags().IntVarP(&baudRate, "baud", "b", 9600, "Specify the baud rate for serial connection")
+	monitorCmd.Flags().StringVarP(&deviceAddress, "address", "a", "", "Specify the Bluetooth device address")
+	monitorCmd.Flags().BoolVarP(&useBluetooth, "bluetooth", "l", false, "Use Bluetooth for connection instead of serial")
 
 	rootCmd.AddCommand(monitorCmd)
 }
