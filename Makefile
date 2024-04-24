@@ -22,6 +22,7 @@ build-cli:
 	@mkdir -p $(BUILD_DIR)
 	@GOOS=$(GOOS) GOARCH=$(GOARCH) go build -o $(BUILD_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH) ./cmd
 	@echo "Build complete: $(BUILD_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)"
+	@chmod +x $(BUILD_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)
 
 test: ## Run tests
 	@echo "Running tests..."
