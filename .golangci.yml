@@ -31,3 +31,4 @@ linters:
     - ireturn
     - perfsprint
     - godox
+    - lll
