@@ -31,7 +31,6 @@ from an OBD2 interface via serial or Bluetooth connection. It displays data dyna
 a full-screen terminal interface powered by termui.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		var connector gobd2.Connector
-		var err error
 
 		if useBluetooth {
 			if deviceAddress == "" {
@@ -41,16 +40,14 @@ a full-screen terminal interface powered by termui.`,
 		} else {
 			connector = gobd2.NewSerialConnector(portName, baudRate, &gobd2.RealPortOpener{})
 		}
-
-		if err = connector.Connect(); err != nil {
-			log.Fatalf("Failed to connect: %v", err)
-		}
 		defer connector.Close()
 
-		commander := gobd2.NewCommander(connector)
-		if err := runMonitor(commander); err != nil {
-			log.Fatalf("Monitor failed: %v", err)
+		if err := connector.Connect(); err != nil {
+			log.Fatalf("Failed to connect: %v", err)
 		}
+
+		commander := gobd2.NewCommander(connector)
+		runMonitor(commander)
 	},
 }
 
@@ -62,6 +59,7 @@ func createWidgets(n int) []*widgets.Paragraph {
 		widgetsList[i].Text = fmt.Sprintf("Widget %d: Initializing...", i+1)
 		widgetsList[i].Border = true
 	}
+
 	return widgetsList
 }
 
@@ -79,32 +77,36 @@ func setupDynamicGrid(widgetsList []*widgets.Paragraph) *termui.Grid {
 	gridRows := []interface{}{}
 
 	// Create slices to hold the row and column configurations
-	for rowIndex := 0; rowIndex < rows; rowIndex++ {
+	for rowIndex := range rows {
 		rowWidgets := []interface{}{}
-		for colIndex := 0; colIndex < cols; colIndex++ {
+
+		for colIndex := range cols {
 			widgetIndex := rowIndex*cols + colIndex
 			if widgetIndex >= len(widgetsList) {
 				break // No more widgets to place
 			}
+
 			colWidth := 1.0 / float64(cols) // Calculate the width of each column
 			widget := widgetsList[widgetIndex]
 			rowWidgets = append(rowWidgets, termui.NewCol(colWidth, widget))
 		}
+
 		// Add a new row to the grid with the widgets for this row
 		gridRows = append(gridRows, termui.NewRow(rowHeight, rowWidgets...))
 	}
+
 	grid.Set(gridRows...)
 
 	return grid
 }
 
 // runMonitor initializes the UI and starts the monitoring process.
-func runMonitor(commander *gobd2.Commander) error {
+func runMonitor(commander *gobd2.Commander) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	if err := termui.Init(); err != nil {
-		log.Fatalf("failed to initialize termui: %v", err)
+		log.Printf("failed to initialize termui: %v", err)
 	}
 	defer termui.Close()
 
@@ -124,8 +126,6 @@ func runMonitor(commander *gobd2.Commander) error {
 	}
 
 	handleUIEvents(ctx)
-
-	return nil
 }
 
 // startMonitoring begins the data monitoring process for each PID using goroutines.
@@ -146,6 +146,7 @@ func startMonitoring(ctx context.Context, p *widgets.Paragraph, commander *gobd2
 			} else {
 				p.Text = "Data: " + data
 			}
+
 			termui.Render(p)
 		}
 	}
