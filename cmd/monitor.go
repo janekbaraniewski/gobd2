@@ -31,7 +31,7 @@ from an OBD2 interface via serial or Bluetooth connection. It displays data dyna
 a full-screen terminal interface powered by termui.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		var connector gobd2.Connector
-		// var err error
+		var err error
 
 		if useBluetooth {
 			if deviceAddress == "" {
@@ -42,10 +42,10 @@ a full-screen terminal interface powered by termui.`,
 			connector = gobd2.NewSerialConnector(portName, baudRate, &gobd2.RealPortOpener{})
 		}
 
-		// if err = connector.Connect(); err != nil {
-		// 	log.Fatalf("Failed to connect: %v", err)
-		// }
-		// defer connector.Close()
+		if err = connector.Connect(); err != nil {
+			log.Fatalf("Failed to connect: %v", err)
+		}
+		defer connector.Close()
 
 		commander := gobd2.NewCommander(connector)
 		if err := runMonitor(commander); err != nil {
@@ -129,7 +129,7 @@ func runMonitor(commander *gobd2.Commander) error {
 }
 
 // startMonitoring begins the data monitoring process for each PID using goroutines.
-func startMonitoring(ctx context.Context, p *widgets.Paragraph, _ *gobd2.Commander, pid gobd2.CommandCode) {
+func startMonitoring(ctx context.Context, p *widgets.Paragraph, commander *gobd2.Commander, pid gobd2.CommandCode) {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
@@ -138,13 +138,14 @@ func startMonitoring(ctx context.Context, p *widgets.Paragraph, _ *gobd2.Command
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// data, err := commander.ExecuteCommand(pid)
-			// if err != nil {
-			// widgetsList[i].Text = "Error: " + err.Error()
-			// } else {
-			p.Text = "Data: " + "data"
 			p.Title = string(pid)
-			// }
+
+			data, err := commander.ExecuteCommand(pid)
+			if err != nil {
+				p.Text = "Error: " + err.Error()
+			} else {
+				p.Text = "Data: " + data
+			}
 			termui.Render(p)
 		}
 	}
