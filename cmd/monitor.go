@@ -115,6 +115,8 @@ func runMonitor(commander *gobd2.Commander) {
 		gobd2.VehicleSpeedCommand,
 		gobd2.ThrottlePositionCommand,
 		gobd2.CoolantTemperatureCommand,
+		gobd2.FuelPressureCommand,
+		gobd2.FuelTankLevelInputCommand,
 	}
 	widgetsList := createWidgets(len(pids))
 	grid := setupDynamicGrid(widgetsList)
