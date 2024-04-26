@@ -13,11 +13,12 @@ help:  ## Show this help message
 	@grep -E '^[a-zA-Z_\-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-30s %s\n", $$1, $$2}'
 
 build: ## Build the project
+build: build-cli
 	@echo "Building the project..."
 	go build $(PKG)
 
 .PHONY: build-cli
-build-cli:
+build-cli: ## Build CLI
 	@echo "Building the CLI application for $(GOOS)/$(GOARCH)..."
 	@mkdir -p $(BUILD_DIR)
 	@GOOS=$(GOOS) GOARCH=$(GOARCH) go build -o $(BUILD_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH) ./cmd
