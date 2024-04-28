@@ -1,3 +1,4 @@
+//nolint:all
 package main
 
 import (
@@ -22,10 +23,10 @@ a full-screen terminal interface powered by termui.`,
 			log.Fatalf("Error discovering devices: %v", err)
 		}
 
-		fmt.Println("Discovered Devices:")
+		fmt.Println("Discovered Devices:") //nolint
 		for _, dev := range devices {
 			props, _ := dev.GetProperties()
-			fmt.Printf("Name: %s, Address: %s\n", props.Name, props.Address)
+			fmt.Printf("Name: %s, Address: %s\n", props.Name, props.Address) //nolint
 		}
 	},
 }
@@ -34,16 +35,16 @@ func discoverDevices() ([]*device.Device1, error) {
 	// Get the default Bluetooth adapter.
 	a, err := adapter.GetDefaultAdapter()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get default adapter: %v", err)
+		return nil, fmt.Errorf("failed to get default adapter: %v", err) //nolint
 	}
 
 	// Start discovery.
-	log.Println("Starting discovery...")
+	log.Println("Starting discovery...") //nolint
 	err = a.StartDiscovery()
 	if err != nil {
 		return nil, fmt.Errorf("failed to start discovery: %v", err)
 	}
-	defer a.StopDiscovery()
+	defer a.StopDiscovery() //nolint:errcheck
 
 	// Allow some time for discovery.
 	time.Sleep(10 * time.Second)

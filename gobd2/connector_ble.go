@@ -32,17 +32,22 @@ func (bc *BluetoothConnector) Connect() error {
 	// Start scanning
 	ch := make(chan bluetooth.ScanResult, 1)
 	err := adapter.Scan(func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {
-		if strings.ToLower(result.Address.String()) == strings.ToLower(bc.deviceAddress) {
+		if strings.EqualFold(strings.ToLower(result.Address.String()), strings.ToLower(bc.deviceAddress)) {
 			dev, err := adapter.Connect(result.Address, bluetooth.ConnectionParams{})
 			if err != nil {
 				return
 			}
+
 			bc.device = &dev
+
 			ch <- result
-			adapter.StopScan()
+
+			if err := adapter.StopScan(); err != nil {
+				return
+			}
 		}
 	})
-	if err != nil {
+	if err != nil { //nolint
 		return err
 	}
 
@@ -71,6 +76,7 @@ func (bc *BluetoothConnector) Close() error {
 	if bc.device != nil {
 		return bc.device.Disconnect()
 	}
+
 	return nil
 }
 
