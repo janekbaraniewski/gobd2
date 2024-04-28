@@ -103,7 +103,7 @@ func (bc *BluetoothConnector) SendCommand(command CommandCode) (string, error) {
 	}
 
 	// Write command to the characteristic
-	if _, err := characteristic[0].Write([]byte(command + "\r")); err != nil {
+	if _, err := characteristic[0].WriteWithoutResponse([]byte(command + "\r")); err != nil {
 		return "", err
 	}
 
