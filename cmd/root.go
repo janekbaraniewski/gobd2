@@ -35,6 +35,7 @@ The tool supports a variety of commands to facilitate real-time monitoring and d
 
 func main() {
 	registerMonitorCommand(rootCmd)
+	registerListCommand(rootCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
