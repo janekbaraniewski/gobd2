@@ -33,7 +33,11 @@ func (bc *BluetoothConnector) Connect() error {
 	ch := make(chan bluetooth.ScanResult, 1)
 	err := adapter.Scan(func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {
 		if strings.ToLower(result.Address.String()) == strings.ToLower(bc.deviceAddress) {
-			bc.device = adapter.Connect(result.Address)
+			dev, err := adapter.Connect(result.Address, bluetooth.ConnectionParams{})
+			if err != nil {
+				return
+			}
+			bc.device = &dev
 			ch <- result
 			adapter.StopScan()
 		}
@@ -53,33 +57,40 @@ func (bc *BluetoothConnector) Connect() error {
 	}
 
 	// Optionally connect to the device if not automatically handled by the adapter.Connect
-	if !bc.device.Connected() {
-		if err := bc.device.Connect(); err != nil {
-			return err
-		}
-	}
+	// if !bc.device.Connected() {
+	// 	if err := bc.device.Connect(); err != nil {
+	// 		return err
+	// 	}
+	// }
 
 	return nil
 }
 
 // Close terminates the connection to the Bluetooth device.
 func (bc *BluetoothConnector) Close() error {
-	if bc.device != nil && bc.device.Connected() {
+	if bc.device != nil {
 		return bc.device.Disconnect()
 	}
 	return nil
 }
 
 // SendCommand sends a command to a connected Bluetooth device and returns the response.
-func (bc *BluetoothConnector) SendCommand(command string) (string, error) {
-	if bc.device == nil || !bc.device.Connected() {
+func (bc *BluetoothConnector) SendCommand(command CommandCode) (string, error) {
+	if bc.device == nil {
 		return "", errors.New("device not connected")
 	}
 
 	// Here you need to use specific GATT profile information, such as service UUID and characteristic UUID
 	// Assume we have characteristic UUID for sending command and reading response
-	serviceUUID := bluetooth.MustParseUUID("your-service-uuid")
-	charUUID := bluetooth.MustParseUUID("your-char-uuid")
+	serviceUUID, err := bluetooth.ParseUUID("your-service-uuid")
+	if err != nil {
+		return "", err
+	}
+
+	charUUID, err := bluetooth.ParseUUID("your-char-uuid")
+	if err != nil {
+		return "", err
+	}
 
 	service, err := bc.device.DiscoverServices([]bluetooth.UUID{serviceUUID})
 	if err != nil {
@@ -92,12 +103,13 @@ func (bc *BluetoothConnector) SendCommand(command string) (string, error) {
 	}
 
 	// Write command to the characteristic
-	if err := characteristic[0].Write([]byte(command + "\r")); err != nil {
+	if _, err := characteristic[0].Write([]byte(command + "\r")); err != nil {
 		return "", err
 	}
 
+	response := []byte{}
 	// Assume the device sends a notification with the response
-	response, err := characteristic[0].Read()
+	_, err = characteristic[0].Read(response)
 	if err != nil {
 		return "", err
 	}
