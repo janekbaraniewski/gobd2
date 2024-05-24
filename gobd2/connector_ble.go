@@ -2,20 +2,19 @@ package gobd2
 
 import (
 	"errors"
-	"fmt"
+	"log"
 	"strings"
 	"time"
 
-	dbus "github.com/godbus/dbus/v5"
-	"github.com/muka/go-bluetooth/bluez/profile/adapter"
-	"github.com/muka/go-bluetooth/bluez/profile/device"
+	"tinygo.org/x/bluetooth"
 )
+
+var adapter = bluetooth.DefaultAdapter
 
 // BluetoothConnector handles Bluetooth connections.
 type BluetoothConnector struct {
 	deviceAddress string
-	device        *device.Device1
-	adapter       *adapter.Adapter1
+	device        *bluetooth.Device
 }
 
 // NewBluetoothConnector creates a new connector for a Bluetooth device.
@@ -24,44 +23,44 @@ func NewBluetoothConnector(deviceAddress string) *BluetoothConnector {
 		deviceAddress: deviceAddress,
 	}
 }
-
-// Connect initializes the Bluetooth adapter and starts device discovery.
 func (bc *BluetoothConnector) Connect() error {
-	var err error
-	if bc.adapter, err = adapter.GetDefaultAdapter(); err != nil {
-		return fmt.Errorf("failed to get default adapter: %w", err)
+	log.Println("BluetoothConnector::Connect start")
+	log.Println("Enable BT adapter")
+	if err := adapter.Enable(); err != nil {
+		return err
 	}
 
-	if err = bc.adapter.StartDiscovery(); err != nil {
-		return fmt.Errorf("failed to start discovery: %w", err)
-	}
-
-	// This should be handled better in a real application, with timeout and context handling.
-	time.Sleep(10 * time.Second) // Wait for some time to discover devices
-
-	devices, err := bc.adapter.GetDevices()
-	if err != nil {
-		return fmt.Errorf("failed to get devices: %w", err)
-	}
-
-	for _, d := range devices {
-		if d.Properties.Address == bc.deviceAddress {
-			bc.device = d
-
-			break
+	// Start scanning
+	ch := make(chan bluetooth.ScanResult, 1)
+	log.Println("Start scan")
+	err := adapter.Scan(func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {
+		log.Printf("got scan result - %v", result)
+		if strings.EqualFold(strings.ToLower(result.Address.String()), strings.ToLower(bc.deviceAddress)) {
+			log.Printf("got matching result - %v", result)
+			ch <- result // Send result to channel and handle connection outside the callback
 		}
+	})
+	if err != nil { //nolint
+		return err
 	}
 
-	if bc.device == nil {
-		return errors.New("device not found")
+	// Handle timeout
+	select {
+	case result := <-ch:
+		log.Println("Attempting to connect to device")
+		dev, err := adapter.Connect(result.Address, bluetooth.ConnectionParams{})
+		if err != nil {
+			log.Println("Error connecting to the device:", err)
+			return err
+		}
+		bc.device = &dev
+		log.Println("Device connected")
+		return nil
+	case <-time.After(10 * time.Second):
+		log.Println("Failed to find device within 10 seconds")
+		adapter.StopScan()
+		return errors.New("failed to find device")
 	}
-
-	err = bc.device.Connect()
-	if err != nil {
-		return fmt.Errorf("failed to connect to device: %w", err)
-	}
-
-	return nil
 }
 
 // Close terminates the connection to the Bluetooth device.
@@ -69,44 +68,48 @@ func (bc *BluetoothConnector) Close() error {
 	if bc.device != nil {
 		return bc.device.Disconnect()
 	}
-
 	return nil
 }
 
-// Assuming you have a connected device object.
+// SendCommand sends a command to a connected Bluetooth device and returns the response.
 func (bc *BluetoothConnector) SendCommand(command CommandCode) (string, error) {
-	// TODO: find the actual dbus paths for the device
-	servicePath := fmt.Sprintf("%s/service0001", bc.device.Path())
-	charPath := fmt.Sprintf("%s/char0001", servicePath)
+	if bc.device == nil {
+		return "", errors.New("device not connected")
+	}
 
-	// Access the D-Bus connection
-	conn, err := dbus.SystemBus()
+	// Here you need to use specific GATT profile information, such as service UUID and characteristic UUID
+	// Assume we have characteristic UUID for sending command and reading response
+	serviceUUID, err := bluetooth.ParseUUID("your-service-uuid")
 	if err != nil {
-		return "", fmt.Errorf("failed to connect to system bus: %w", err)
-	}
-
-	// Access the characteristic
-	char := conn.Object("org.bluez", dbus.ObjectPath(charPath))
-	writeValue := []byte(string(command) + "\r")
-
-	call := char.Call("org.bluez.GattCharacteristic1.WriteValue", 0, writeValue, map[string]interface{}{})
-	if call.Err != nil {
-		return "", fmt.Errorf("failed to write value: %w", call.Err)
-	}
-
-	// Read the response, assuming the characteristic allows reading or notifies after write
-	var value []byte
-
-	call = char.Call("org.bluez.GattCharacteristic1.ReadValue", 0, map[string]interface{}{})
-	if call.Err != nil {
-		return "", fmt.Errorf("failed to read value: %w", call.Err)
-	}
-
-	if err := call.Store(&value); err != nil {
 		return "", err
 	}
 
-	response := strings.Trim(string(value), " \r\n>")
+	charUUID, err := bluetooth.ParseUUID("your-char-uuid")
+	if err != nil {
+		return "", err
+	}
 
-	return response, nil
+	service, err := bc.device.DiscoverServices([]bluetooth.UUID{serviceUUID})
+	if err != nil {
+		return "", err
+	}
+
+	characteristic, err := service[0].DiscoverCharacteristics([]bluetooth.UUID{charUUID})
+	if err != nil {
+		return "", err
+	}
+
+	// Write command to the characteristic
+	if _, err := characteristic[0].WriteWithoutResponse([]byte(command + "\r")); err != nil {
+		return "", err
+	}
+
+	response := []byte{}
+	// Assume the device sends a notification with the response
+	_, err = characteristic[0].Read(response)
+	if err != nil {
+		return "", err
+	}
+
+	return strings.Trim(string(response), " \r\n>"), nil
 }

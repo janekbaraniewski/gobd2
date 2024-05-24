@@ -30,18 +30,25 @@ var monitorCmd = &cobra.Command{
 from an OBD2 interface via serial or Bluetooth connection. It displays data dynamically in
 a full-screen terminal interface powered by termui.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		log.Printf("Start monitor command")
+
 		var connector gobd2.Connector
 
 		if useBluetooth {
+			log.Printf("Using bluetooth")
 			if deviceAddress == "" {
 				log.Fatal("Bluetooth device address must be provided when using Bluetooth.")
 			}
+			log.Printf("Building new bluetooth connector")
 			connector = gobd2.NewBluetoothConnector(deviceAddress)
 		} else {
+			log.Printf("Building new serial connector for %v at baud rate %v", portName, baudRate)
 			connector = gobd2.NewSerialConnector(portName, baudRate, &gobd2.RealPortOpener{})
 		}
 		defer connector.Close()
+		log.Printf("Got connector %v", connector)
 
+		log.Printf("Starting connection")
 		if err := connector.Connect(); err != nil {
 			log.Fatalf("Failed to connect: %v", err)
 		}
@@ -115,6 +122,8 @@ func runMonitor(commander *gobd2.Commander) {
 		gobd2.VehicleSpeedCommand,
 		gobd2.ThrottlePositionCommand,
 		gobd2.CoolantTemperatureCommand,
+		gobd2.FuelPressureCommand,
+		gobd2.FuelTankLevelInputCommand,
 	}
 	widgetsList := createWidgets(len(pids))
 	grid := setupDynamicGrid(widgetsList)
