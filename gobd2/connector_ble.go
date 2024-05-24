@@ -2,6 +2,7 @@ package gobd2
 
 import (
 	"errors"
+	"log"
 	"strings"
 	"time"
 
@@ -22,53 +23,44 @@ func NewBluetoothConnector(deviceAddress string) *BluetoothConnector {
 		deviceAddress: deviceAddress,
 	}
 }
-
-// Connect initializes the Bluetooth adapter and starts device discovery.
 func (bc *BluetoothConnector) Connect() error {
+	log.Println("BluetoothConnector::Connect start")
+	log.Println("Enable BT adapter")
 	if err := adapter.Enable(); err != nil {
 		return err
 	}
 
 	// Start scanning
 	ch := make(chan bluetooth.ScanResult, 1)
+	log.Println("Start scan")
 	err := adapter.Scan(func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {
+		log.Printf("got scan result - %v", result)
 		if strings.EqualFold(strings.ToLower(result.Address.String()), strings.ToLower(bc.deviceAddress)) {
-			dev, err := adapter.Connect(result.Address, bluetooth.ConnectionParams{})
-			if err != nil {
-				return
-			}
-
-			bc.device = &dev
-
-			ch <- result
-
-			if err := adapter.StopScan(); err != nil {
-				return
-			}
+			log.Printf("got matching result - %v", result)
+			ch <- result // Send result to channel and handle connection outside the callback
 		}
 	})
 	if err != nil { //nolint
 		return err
 	}
 
+	// Handle timeout
 	select {
-	case <-ch:
+	case result := <-ch:
+		log.Println("Attempting to connect to device")
+		dev, err := adapter.Connect(result.Address, bluetooth.ConnectionParams{})
+		if err != nil {
+			log.Println("Error connecting to the device:", err)
+			return err
+		}
+		bc.device = &dev
+		log.Println("Device connected")
+		return nil
 	case <-time.After(10 * time.Second):
+		log.Println("Failed to find device within 10 seconds")
+		adapter.StopScan()
 		return errors.New("failed to find device")
 	}
-
-	if bc.device == nil {
-		return errors.New("device not found")
-	}
-
-	// Optionally connect to the device if not automatically handled by the adapter.Connect
-	// if !bc.device.Connected() {
-	// 	if err := bc.device.Connect(); err != nil {
-	// 		return err
-	// 	}
-	// }
-
-	return nil
 }
 
 // Close terminates the connection to the Bluetooth device.
@@ -76,7 +68,6 @@ func (bc *BluetoothConnector) Close() error {
 	if bc.device != nil {
 		return bc.device.Disconnect()
 	}
-
 	return nil
 }
 
